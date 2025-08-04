@@ -1,0 +1,345 @@
+forall l1:LockHead, l2:LockHead, s:Side  . (val(l1 != l2) => 
+    [true* . 
+     (LevelingEquipmentActuator(l1,s,endStopOpening) || LevelingEquipmentActuator(l1,s,open)).
+     !(LevelingEquipmentActuator(l1,s,endStopClosing))* .
+     (LevelingEquipmentActuator(l2,s,endStopOpening) || LevelingEquipmentActuator(l2,s,open)) .
+     !(LevelingEquipmentActuator(l1,s,endStopClosing) || LevelingEquipmentActuator(l2,s,endStopClosing))* .
+        exists l:LockHead . val(l!=l1&&l!=l2) && (LevelingEquipmentActuator(l,s,open)||LevelingEquipmentActuator(l,oppositeSide(s),open))]false)
+&&
+forall l1:LockHead, l2:LockHead, s:Side  . (val(l1 != l2) => 
+    [true* . 
+     (LockActuator(l1,s,endStopOpening) || LockActuator(l1,s,open)).
+     !(LockActuator(l1,s,endStopClosing))* .
+     (LockActuator(l2,s,endStopOpening) || LockActuator(l2,s,open)) .
+     !(LockActuator(l1,s,endStopClosing) || LockActuator(l2,s,endStopClosing))* .
+        exists l:LockHead . val(l!=l1&&l!=l2) && (LevelingEquipmentActuator(l,s,open)||LevelingEquipmentActuator(l,oppositeSide(s),open))]false)
+&&
+
+
+forall l1:LockHead, l2:LockHead, s:Side  . (val(l1 != l2) => 
+    [true* . 
+     (LevelingEquipmentActuator(l1,s,endStopOpening) || LevelingEquipmentActuator(l1,s,open)).
+     !(LevelingEquipmentActuator(l1,s,endStopClosing))* .
+     (LevelingEquipmentActuator(l2,s,endStopOpening) || LevelingEquipmentActuator(l2,s,open)) .
+     !(LevelingEquipmentActuator(l1,s,endStopClosing) || LevelingEquipmentActuator(l2,s,endStopClosing))* .
+        exists l:LockHead . val(l!=l1&&l!=l2) && (LockActuator(l,s,open)||LockActuator(l,oppositeSide(s),open))]false)
+&&
+forall l1:LockHead, l2:LockHead, s:Side  . (val(l1 != l2) =>
+    [true* . 
+     (LockActuator(l1,s,endStopOpening) || LockActuator(l1,s,open)).
+     !(LockActuator(l1,s,endStopClosing))* .
+     (LockActuator(l2,s,endStopOpening) || LockActuator(l2,s,open)) .
+     !(LockActuator(l1,s,endStopClosing) || LockActuator(l2,s,endStopClosing))* .
+        exists l:LockHead . val(l!=l1&&l!=l2) && (LockActuator(l,s,open)||LockActuator(l,oppositeSide(s),open))]false)
+&&
+forall l:LockHead, s:Side.
+    [true*.
+     WaterSensor(l,uneven).
+     !(WaterSensor(l,even))*.
+     LockActuator(l,s,open)]false 
+&&
+
+
+forall s:Side.
+    [true*.
+     TrafficLightActuator(upperhead, s, downstream, green).
+     !(TrafficLightActuator(upperhead, s, downstream, single_red))*.
+     (TrafficLightActuator(upperhead, s, upstream, green)||TrafficLightActuator(upperhead, oppositeSide(s), upstream, green))]false
+&&
+forall s:Side.
+    [true*.
+     (LockActuator(upperhead,s,endStopClosing)||LockActuator(upperhead,s,close)).
+     !(LockActuator(upperhead,s,endStopOpening))*.
+     (TrafficLightActuator(upperhead, s, upstream, green)||TrafficLightActuator(upperhead, oppositeSide(s), upstream, green))]false
+&&
+forall s:Side.
+    [true*.
+     TrafficLightActuator(lowerhead, s, upstream, green).
+     !(TrafficLightActuator(lowerhead, s, upstream, single_red))*.
+     (TrafficLightActuator(lowerhead, s, downstream, green)||TrafficLightActuator(lowerhead, oppositeSide(s), downstream, green))]false
+&&
+forall s:Side.
+    [true*.
+     (LockActuator(lowerhead,s,endStopClosing)||LockActuator(lowerhead,s,close)).
+     !(LockActuator(lowerhead,s,endStopOpening))*.
+     (TrafficLightActuator(lowerhead, s, downstream, green)||TrafficLightActuator(lowerhead, oppositeSide(s), downstream, green))]false
+&&
+
+
+forall s:Side.
+    [true*.
+     TrafficLightActuator(upperhead,s,upstream,green).
+     !(TrafficLightActuator(upperhead,s,upstream,single_red)||TrafficLightActuator(upperhead,s,upstream,redred)||TrafficLightActuator(upperhead,s,upstream,redgreen))*.
+     (TrafficLightActuator(upperhead, s, downstream, green)||TrafficLightActuator(upperhead,oppositeSide(s),downstream,green))]false
+&&
+forall s:Side.
+    [true*.
+     (LockActuator(upperhead,s,endStopClosing)||LockActuator(upperhead,s,close)).
+     !(LockActuator(upperhead,s,endStopOpening))*.
+     (TrafficLightActuator(upperhead, s, downstream, green)||TrafficLightActuator(upperhead,oppositeSide(s),downstream,green))]false
+&&
+forall s:Side.
+    [true*.
+     TrafficLightActuator(lowerhead,s,downstream,green).
+     !(TrafficLightActuator(lowerhead,s,downstream,single_red)||TrafficLightActuator(lowerhead,s,downstream,redred)||TrafficLightActuator(lowerhead,s,downstream,redgreen))*.
+     (TrafficLightActuator(lowerhead,s,upstream,green)||TrafficLightActuator(lowerhead,oppositeSide(s),upstream,green))]false
+&&
+forall s:Side.
+    [true*.
+     (LockActuator(lowerhead,s,endStopClosing)||LockActuator(lowerhead,s,close)).
+     !(LockActuator(lowerhead,s,endStopOpening))*.
+     (TrafficLightActuator(lowerhead,s,upstream,green)||TrafficLightActuator(lowerhead,oppositeSide(s),upstream,green))]false
+&&
+forall s:Side.
+    [true*.
+     EnableVortexConfiguration(LOWER).
+     !(EnableVortexConfiguration(UPPER)||EnableVortexConfiguration(WHOLE))*.
+     TrafficLightActuator(upperhead,s,upstream,green).
+     !(EnableVortexConfiguration(UPPER)||EnableVortexConfiguration(WHOLE)||TrafficLightActuator(upperhead,s,upstream,single_red)||TrafficLightActuator(upperhead,s,upstream,redred)||TrafficLightActuator(upperhead,s,upstream,redgreen))*.
+     (TrafficLightActuator(middlehead,s,downstream,green)||TrafficLightActuator(middlehead,oppositeSide(s),downstream,green))]false
+&&
+forall s:Side.
+    [true*.
+     EnableVortexConfiguration(UPPER).
+     !(EnableVortexConfiguration(LOWER)||EnableVortexConfiguration(WHOLE))*.
+     TrafficLightActuator(lowerhead,s,downstream,green).
+     !(EnableVortexConfiguration(LOWER)||EnableVortexConfiguration(WHOLE)||TrafficLightActuator(lowerhead,s,downstream,single_red)||TrafficLightActuator(lowerhead,s,downstream,redred)||TrafficLightActuator(lowerhead,s,downstream,redgreen))*.
+     (TrafficLightActuator(middlehead,s,upstream,green)||TrafficLightActuator(middlehead,oppositeSide(s),upstream,green))]false
+&&
+forall s:Side, ss:StreamSide.
+    [true*.
+     (LockActuator(middlehead,s,endStopClosing)||LockActuator(middlehead,s,close)).
+     !(LockActuator(middlehead,s,endStopOpening))*.
+     (TrafficLightActuator(middlehead,s,ss,green)||TrafficLightActuator(middlehead,oppositeSide(s),ss,green))]false
+&&
+
+
+forall l:LockHead, s:Side.
+    [!(LockSensor(l,s,sense_opened))*.
+     LockActuator(l,s,endStopOpening)]false
+&&
+forall l:LockHead, s:Side.
+    [!(LockSensor(l,s,sense_closed))*.
+     LockActuator(l,s,endStopClosing)]false
+&&
+forall l:LockHead, s:Side.
+    [!(LevelingEquipmentSensor(l,s,sense_opened))*.
+     LevelingEquipmentActuator(l,s,endStopOpening)]false
+&&
+forall l:LockHead, s:Side.
+    [!(LevelingEquipmentSensor(l,s,sense_closed))*.
+     LevelingEquipmentActuator(l,s,endStopClosing)]false
+&&
+
+
+forall s:Side.
+    [true*.
+     TrafficLightActuator(upperhead, s, downstream, green).
+     !(TrafficLightActuator(upperhead, s, downstream, single_red))*.
+     (LockActuator(upperhead, s, close)||LockActuator(upperhead, oppositeSide(s), close))]false 
+&&
+forall s:Side.
+    [true*.
+     (TrafficLightActuator(upperhead, s, upstream, green)||TrafficLightActuator(upperhead, s, upstream, redgreen)).
+     !(TrafficLightActuator(upperhead, s, upstream, single_red)||TrafficLightActuator(upperhead, s, upstream, redred))*.
+     (LockActuator(upperhead, s, close)||LockActuator(upperhead, oppositeSide(s), close))]false 
+&&
+forall s:Side.
+    [true*.
+     TrafficLightActuator(lowerhead, s, upstream, green).
+     !(TrafficLightActuator(lowerhead, s, upstream, single_red))*.
+     (LockActuator(lowerhead, s, close)||LockActuator(lowerhead, oppositeSide(s), close))]false 
+&&
+forall s:Side. 
+    [true*.
+     (TrafficLightActuator(lowerhead, s, downstream, green)||TrafficLightActuator(lowerhead, s, downstream, redgreen)).
+     !(TrafficLightActuator(lowerhead, s, downstream, single_red)||TrafficLightActuator(lowerhead, s, downstream, redred))*.
+     (LockActuator(lowerhead, s, close)||LockActuator(lowerhead, oppositeSide(s), close))]false 
+&&
+forall s:Side. 
+    [true*.
+     EnableVortexConfiguration(UPPER).
+     !(EnableVortexConfiguration(WHOLE)||EnableVortexConfiguration(LOWER))*.
+     TrafficLightActuator(middlehead, s, upstream, green).
+     !(TrafficLightActuator(middlehead, s, upstream, single_red)||EnableVortexConfiguration(WHOLE)||EnableVortexConfiguration(LOWER))*.
+     (LockActuator(middlehead, s, close)||LockActuator(middlehead, oppositeSide(s), close))]false 
+&&
+forall s:Side. 
+    [true*.
+     EnableVortexConfiguration(UPPER).
+     !(EnableVortexConfiguration(WHOLE)||EnableVortexConfiguration(LOWER))*.
+     (TrafficLightActuator(lowerhead, s, downstream, green)||TrafficLightActuator(lowerhead, s, downstream, redgreen)).
+     !(TrafficLightActuator(lowerhead, s, downstream, single_red)||TrafficLightActuator(lowerhead, s, downstream, redred)||EnableVortexConfiguration(WHOLE)||EnableVortexConfiguration(LOWER))*.
+     (LockActuator(middlehead, s, close)||LockActuator(middlehead, oppositeSide(s), close))]false 
+&&
+forall s:Side. 
+    [true*.
+     EnableVortexConfiguration(LOWER).
+     !(EnableVortexConfiguration(WHOLE)||EnableVortexConfiguration(UPPER))*.
+     TrafficLightActuator(middlehead, s, downstream, green).
+     !(TrafficLightActuator(middlehead, s, downstream, single_red)||EnableVortexConfiguration(WHOLE)||EnableVortexConfiguration(UPPER))*.
+     (LockActuator(middlehead, s, close)||LockActuator(middlehead, oppositeSide(s), close))]false 
+&&
+forall s:Side. 
+    [true*.
+     EnableVortexConfiguration(LOWER).
+     !(EnableVortexConfiguration(WHOLE)||EnableVortexConfiguration(UPPER))*.
+     (TrafficLightActuator(upperhead, s, upstream, green)||TrafficLightActuator(upperhead, s, upstream, redgreen)).
+     !(TrafficLightActuator(upperhead, s, upstream, single_red)||TrafficLightActuator(upperhead, s, upstream, redred)||EnableVortexConfiguration(WHOLE)||EnableVortexConfiguration(UPPER))*.
+     (LockActuator(middlehead, s, close)||LockActuator(middlehead, oppositeSide(s), close))]false 
+&&
+
+
+forall l:LockHead, s:Side. 
+    [true*.
+     (LockActuator(l,s,endStopOpening)).
+     !(LockActuator(l,s,endStopClosing)||LockActuator(l,s,close))*.
+     LockActuator(l,s,open)]false
+&&
+
+
+forall l:LockHead, s:Side.
+    [true*.
+     (LockActuator(l,s,endStopClosing)).
+     !(LockActuator(l,s,endStopOpening)||LockActuator(l,s,open))*.
+     LockActuator(l,s,close)]false
+&&   
+
+
+forall l:LockHead, s:Side.
+    [true*.
+     (LevelingEquipmentActuator(l,s,endStopOpening)).
+     !(LevelingEquipmentActuator(l,s,endStopClosing)||LevelingEquipmentActuator(l,s,close))*.
+     LevelingEquipmentActuator(l,s,open)]false
+&&
+
+
+forall l:LockHead, s:Side.
+    [true*.
+     (LevelingEquipmentActuator(l,s,endStopClosing)).
+     !(LevelingEquipmentActuator(l,s,endStopOpening)||LevelingEquipmentActuator(l,s,open))*.
+     LevelingEquipmentActuator(l,s,close)]false
+&&
+
+
+forall s:Side.
+    [true*.
+     (LockActuator(lowerhead,s,endStopClosing)||LockActuator(lowerhead,s,close)).
+     !(LockActuator(lowerhead,s,endStopOpening))*.
+     EnableVortexConfiguration(UPPER)]false
+&&
+forall s:Side.
+    [true*.
+     (LockActuator(upperhead,s,endStopClosing)||LockActuator(upperhead,s,close)).
+     !(LockActuator(upperhead,s,endStopOpening))*.
+     EnableVortexConfiguration(LOWER)]false
+&&
+forall s:Side.
+    [true*.
+     (LockActuator(middlehead,s,endStopClosing)||LockActuator(middlehead,s,close)).
+     !(LockActuator(middlehead,s,endStopOpening))*.
+     EnableVortexConfiguration(WHOLE)]false
+&&
+
+
+forall s:Side.
+    [true*.
+     EnableVortexConfiguration(UPPER).
+     !(EnableVortexConfiguration(LOWER)||EnableVortexConfiguration(WHOLE))*.
+     (LockActuator(middlehead,s,endStopOpening)||LockActuator(middlehead,s,open)).
+     !(LockActuator(middlehead,s,endStopClosing)||EnableVortexConfiguration(WHOLE))*.
+     EnableVortexConfiguration(LOWER)]false
+&&
+forall s:Side.
+    [true*.
+     EnableVortexConfiguration(UPPER).
+     !(EnableVortexConfiguration(LOWER)||EnableVortexConfiguration(WHOLE))*.
+     (LockActuator(upperhead,s,endStopOpening)||LockActuator(upperhead,s,open)).
+     !(LockActuator(upperhead,s,endStopClosing)||EnableVortexConfiguration(LOWER))*.
+     EnableVortexConfiguration(WHOLE)]false
+&&
+forall s:Side.
+    [true*.
+     EnableVortexConfiguration(WHOLE).
+     !(EnableVortexConfiguration(LOWER)||EnableVortexConfiguration(UPPER))*.
+     (LockActuator(upperhead,s,endStopOpening)||LockActuator(upperhead,s,open)).
+     !(LockActuator(upperhead,s,endStopClosing)||EnableVortexConfiguration(LOWER))*.
+     EnableVortexConfiguration(UPPER)]false
+&&
+forall s:Side.
+    [true*.
+     EnableVortexConfiguration(WHOLE).
+     !(EnableVortexConfiguration(LOWER)||EnableVortexConfiguration(UPPER))*.
+     (LockActuator(lowerhead,s,endStopOpening)||LockActuator(lowerhead,s,open)).
+     !(LockActuator(lowerhead,s,endStopClosing)||EnableVortexConfiguration(UPPER))*.
+     EnableVortexConfiguration(LOWER)]false
+&&
+forall s:Side.
+    [true*.
+     EnableVortexConfiguration(LOWER).
+     !(EnableVortexConfiguration(WHOLE)||EnableVortexConfiguration(UPPER))*.
+     (LockActuator(middlehead,s,endStopOpening)||LockActuator(middlehead,s,open)).
+     !(LockActuator(middlehead,s,endStopClosing)||EnableVortexConfiguration(WHOLE))*.
+     EnableVortexConfiguration(UPPER)]false
+&&
+forall s:Side.
+    [true*.
+     EnableVortexConfiguration(LOWER).
+     !(EnableVortexConfiguration(WHOLE)||EnableVortexConfiguration(UPPER))*.
+     (LockActuator(lowerhead,s,endStopOpening)||LockActuator(lowerhead,s,open)).
+     !(LockActuator(lowerhead,s,endStopClosing)||EnableVortexConfiguration(UPPER))*.
+     EnableVortexConfiguration(WHOLE)]false
+&&
+
+
+forall s:Side, ss:StreamSide.
+    [true*.
+     (TrafficLightActuator(upperhead,s,ss,green)||TrafficLightActuator(upperhead,s,ss,redgreen)||TrafficLightActuator(upperhead,s,ss,redred)).
+     !(TrafficLightActuator(upperhead,s,ss,single_red))*.
+     EnableVortexConfiguration(LOWER)]false
+&&
+forall s:Side, ss:StreamSide.
+    [true*.
+     (TrafficLightActuator(lowerhead,s,ss,green)||TrafficLightActuator(lowerhead,s,ss,redgreen)||TrafficLightActuator(lowerhead,s,ss,redred)).
+     !(TrafficLightActuator(lowerhead,s,ss,single_red))*.
+     EnableVortexConfiguration(UPPER)]false
+&&
+forall s:Side, ss:StreamSide.
+    [true*.
+     TrafficLightActuator(middlehead,s,ss,green).
+     !(TrafficLightActuator(middlehead,s,ss,single_red))*.
+     EnableVortexConfiguration(WHOLE)]false
+&&
+
+
+forall l:LockHead, s:Side.
+    [true*.
+     LevelingEquipmentActuator(lowerhead, right, emergencyStop).
+     !(EmergencyComplexCommand(disable)||EmergencyComplexCommand(enable))*.
+     (LockActuator(l,s,open)||LockActuator(l,s,close)||LevelingEquipmentActuator(l,s,open)||LevelingEquipmentActuator(l,s,close))]false
+&&
+
+forall l:LockHead, s:Side, ss:StreamSide, t:TrafficLightSign.
+    [true*.
+     LevelingEquipmentActuator(lowerhead, right, emergencyStop).
+     !(EmergencyComplexCommand(disable)||EmergencyComplexCommand(enable))*.
+     TrafficLightActuator(l,s,ss,t)]false
+&&
+
+
+[true*. EmergencyComplexCommand(enable)]
+    forall l:LockHead, s:Side, ss:StreamSide.
+        ((mu X.[!LockActuator(l,s,emergencyStop)] X && mu Q.<true>true) &&
+         (mu Y.[!LevelingEquipmentActuator(l,s,emergencyStop)] Y && mu Q.<true>true) &&
+         (mu Z.[!TrafficLightActuator(l,s,ss,single_red)] Z && mu Q.<true>true))
+&&
+
+
+forall s:Side. 
+    [true*.
+     (TrafficLightActuator(upperhead,s,downstream,redred)||TrafficLightActuator(upperhead,s,downstream,redgreen)||
+        TrafficLightActuator(middlehead,s,upstream,redred)||TrafficLightActuator(middlehead,s,upstream,redgreen))]false
+&&
+forall s:Side, ss:StreamSide.
+    [true*.
+     (TrafficLightActuator(middlehead,s,ss,redred)||TrafficLightActuator(middlehead,s,ss,redgreen))]false

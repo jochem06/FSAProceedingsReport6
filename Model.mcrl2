@@ -1,0 +1,839 @@
+sort %Structure types
+     LockHead = struct upperhead | middlehead | lowerhead;
+     Side = struct left | right;
+     StreamSide = struct upstream | downstream;
+
+     %Command types
+     ConsoleCommand = struct command_open | command_close | command_stop;
+     EmergencyCommand = struct enable | disable;
+     TrafficLightSign = struct redred | single_red | redgreen | green;
+     ActuatorCommand = struct open | close | stop | emergencyStop | endStopClosing | endStopOpening;
+     VortexConfiguration = struct UPPER | LOWER | WHOLE;
+
+     %(Observed) status types
+     Position = struct opened | closed | opening | closing;
+     Emergency = struct enabled | disabled;
+     SensorPosition = struct sense_opened | sense_closed;
+     WaterStatus = struct even | uneven;
+     
+act  %Input actions
+     LockCommand, LevelingEquipmentCommand: LockHead#ConsoleCommand;
+     EmergencyComplexCommand: EmergencyCommand;
+     TrafficLightCommand: LockHead#StreamSide#TrafficLightSign;
+     VortexConfigCommand: VortexConfiguration;
+
+     LockSensor, LevelingEquipmentSensor: LockHead#Side#SensorPosition;
+     WaterSensor: LockHead#WaterStatus;
+
+     %Output actions
+     LockActuator, LevelingEquipmentActuator: LockHead#Side#ActuatorCommand;
+     TrafficLightActuator: LockHead#Side#StreamSide#TrafficLightSign;
+     EnableVortexConfiguration: VortexConfiguration;
+
+     %Does nothing
+     skip;
+
+sort %Controller status types
+     LockSideStreamSideTriple = struct triple(lock: LockHead, side: Side, streamside: StreamSide);
+     LockSideTuple = struct tuple(lock: LockHead, side: Side);
+     ConfigLockTuple = struct tuple(config: VortexConfiguration, lock: LockHead);
+
+map  oppositeSide: Side -> Side;
+     isOpenIng: Position -> Bool;
+     nonRelatedVortexConfig: LockHead -> VortexConfiguration;
+     oneLockUp: LockHead -> LockHead;
+     twoLocksUp: LockHead -> LockHead;
+     otherLockInConfig: ConfigLockTuple -> LockHead;
+
+     initialLockStatus: LockSideTuple -> Position;
+     initialLevelingEquipmentStatus: LockSideTuple -> Position;
+     initialLockStoppedStatus: LockSideTuple -> Bool;
+     initialLevelingEquipmentStoppedStatus: LockSideTuple -> Bool;
+     initialTrafficLightStatus: LockSideStreamSideTriple -> TrafficLightSign;
+     initialWaterLockStatus: LockHead -> WaterStatus;
+     
+
+var  l:LockHead, s:Side, ss:StreamSide;
+
+eqn  %Give opposite of given side
+     oppositeSide(left) = right;
+     oppositeSide(right) = left;
+
+     %Check whether command opening is active
+     isOpenIng(opened) = true;
+     isOpenIng(opening) = true;
+     isOpenIng(closed) = false;
+     isOpenIng(closing) = false;
+
+     %Give vortex config of which lock is not part of
+     nonRelatedVortexConfig(upperhead) = LOWER;
+     nonRelatedVortexConfig(middlehead) = WHOLE;
+     nonRelatedVortexConfig(lowerhead) = UPPER;
+
+     %Give one lock up from given lock in order: lower -> middle -> upper -> lower
+     oneLockUp(upperhead) = lowerhead;
+     oneLockUp(middlehead) = upperhead;
+     oneLockUp(lowerhead) = middlehead;
+
+     %two locks up according to oneLockUp rules
+     twoLocksUp(l) = oneLockUp(oneLockUp(l));
+
+     %Give other lock of given vortex config and lock
+     otherLockInConfig(tuple(UPPER, upperhead)) = middlehead;
+     otherLockInConfig(tuple(UPPER, middlehead)) = upperhead;
+     otherLockInConfig(tuple(LOWER, middlehead)) = lowerhead;
+     otherLockInConfig(tuple(LOWER, lowerhead)) = middlehead;
+     otherLockInConfig(tuple(WHOLE, upperhead)) = lowerhead;
+     otherLockInConfig(tuple(WHOLE, lowerhead)) = upperhead;
+
+     %Initial States
+     initialLockStatus(tuple(upperhead, s)) = closed;
+     initialLockStatus(tuple(middlehead, s)) = opened;
+     initialLockStatus(tuple(lowerhead, s)) = closed;
+
+     initialLevelingEquipmentStatus(tuple(upperhead, s)) = closed;
+     initialLevelingEquipmentStatus(tuple(middlehead, s)) = closed;
+     initialLevelingEquipmentStatus(tuple(lowerhead, s)) = closed;
+
+     initialLockStoppedStatus(tuple(l,s)) = false;
+     initialLevelingEquipmentStoppedStatus(tuple(l,s)) = false;
+
+     initialTrafficLightStatus(triple(middlehead, s, ss)) = green;
+     initialTrafficLightStatus(triple(upperhead, s, ss)) = single_red;
+     initialTrafficLightStatus(triple(lowerhead, s, ss)) = single_red;
+     
+     initialWaterLockStatus(l) = even;
+     
+
+proc Controller(LockStatus: LockSideTuple -> Position, 
+                LevelingEquipmentStatus: LockSideTuple -> Position, 
+                LockStoppedStatus: LockSideTuple -> Bool,
+                LevelingEquipmentStoppedStatus: LockSideTuple -> Bool, 
+                TrafficLightStatus: LockSideStreamSideTriple -> TrafficLightSign,   
+                WaterLockStatus: LockHead -> WaterStatus,
+                EmergencyStatus: Emergency,
+                VortexConfigStatus: VortexConfiguration
+               ) = 
+
+          %LOCK COMMANDS
+     sum l:LockHead . LockCommand(l, command_open). 
+          ((VortexConfigStatus != nonRelatedVortexConfig(l)) && 
+           WaterLockStatus(l) == even && 
+
+           (!(LockStatus(tuple(l, left)) == opened && 
+              LockStatus(tuple(l, right)) == opened) || 
+             (LockStoppedStatus(tuple(l, left)) && 
+              LockStoppedStatus(tuple(l, right)))) && 
+                 
+           !((LevelingEquipmentStatus(tuple(twoLocksUp(l), left)) != closed ||
+              LevelingEquipmentStatus(tuple(twoLocksUp(l), right)) != closed) ||
+             (LevelingEquipmentStatus(tuple(oneLockUp(l), left)) != closed ||
+              LevelingEquipmentStatus(tuple(oneLockUp(l), right)) != closed)) && 
+           LockStatus(tuple(otherLockInConfig(tuple(VortexConfigStatus, l)), left)) == closed &&
+           LockStatus(tuple(otherLockInConfig(tuple(VortexConfigStatus, l)), right)) == closed &&
+           EmergencyStatus == disabled
+          ) 
+          -> 
+           (LockStatus(tuple(l, left)) == opened && 
+            LockStatus(tuple(l, right)) == opened) -> 
+             skip . Controller(LockStoppedStatus=
+                               LockStoppedStatus[tuple(l,left)->false][tuple(l,right)->false])
+            <> (LockStatus(tuple(l, right)) == opened) -> 
+              LockActuator(l, left, open) . 
+              Controller(LockStatus=LockStatus[tuple(l,left)->opening],
+                         LockStoppedStatus=LockStoppedStatus[tuple(l,left)->false]
+                                                            [tuple(l,right)->false])
+             <> (LockStatus(tuple(l, left)) == opened) -> 
+               LockActuator(l, right, open) . 
+               Controller(LockStatus=LockStatus[tuple(l,right)->opening],
+                          LockStoppedStatus=LockStoppedStatus[tuple(l,left)->false]
+                                                             [tuple(l,right)->false])
+              <> LockActuator(l, left, open) . 
+                LockActuator(l, right, open) . 
+                Controller(LockStatus=
+                            LockStatus[tuple(l,left)->opening][tuple(l,right)->opening],
+                           LockStoppedStatus=
+                            LockStoppedStatus[tuple(l,left)->false][tuple(l,right)->false])
+          <> skip.Controller() +
+
+     sum l:LockHead . LockCommand(l, command_close).
+          ((VortexConfigStatus != nonRelatedVortexConfig(l)) &&
+
+           (!(LockStatus(tuple(l, left)) == closed && LockStatus(tuple(l, right)) == closed) ||
+             (LockStoppedStatus(tuple(l, left)) && LockStoppedStatus(tuple(l, right)))) &&
+                
+           ((l == middlehead) => 
+            ((VortexConfigStatus == UPPER && 
+              TrafficLightStatus(triple(l, left, upstream)) == single_red && 
+              TrafficLightStatus(triple(l, right, upstream)) == single_red) ||
+             (VortexConfigStatus == LOWER && 
+              TrafficLightStatus(triple(l, left, downstream)) == single_red && 
+              TrafficLightStatus(triple(l, right, downstream)) == single_red))) &&
+           ((l != middlehead) => 
+            (TrafficLightStatus(triple(l, left, upstream)) == single_red && 
+             TrafficLightStatus(triple(l, right, upstream)) == single_red && 
+             TrafficLightStatus(triple(l, left, downstream)) == single_red && 
+             TrafficLightStatus(triple(l, right, downstream)) == single_red)) &&
+
+           (exists v: VortexConfiguration . 
+            (v != nonRelatedVortexConfig(l) && 
+             LockStatus(tuple(otherLockInConfig(tuple(v, l)), left)) == closed && 
+             LockStatus(tuple(otherLockInConfig(tuple(v, l)), right)) == closed &&
+             ((l == middlehead) =>
+              ((v == UPPER && 
+                TrafficLightStatus(triple(lowerhead, left, downstream)) == single_red && 
+                TrafficLightStatus(triple(lowerhead, right, downstream)) == single_red) ||
+               (v == LOWER && 
+                TrafficLightStatus(triple(upperhead, left, upstream)) == single_red && 
+                TrafficLightStatus(triple(upperhead, right, upstream)) == single_red)
+              )
+             ) &&
+             ((l != middlehead) =>
+              (((otherLockInConfig(tuple(v, l)) == middlehead) && 
+                ((v == UPPER && 
+                  TrafficLightStatus(triple(middlehead, right, upstream)) == single_red &&
+                  TrafficLightStatus(triple(middlehead, left, upstream)) == single_red) ||
+                 (v == LOWER && 
+                  TrafficLightStatus(triple(middlehead, right, downstream)) == single_red &&
+                  TrafficLightStatus(triple(middlehead, left, downstream)) == single_red)
+                )
+               ) || 
+               ((otherLockInConfig(tuple(v, l)) != middlehead) && 
+                TrafficLightStatus(triple(otherLockInConfig(tuple(v, l)), left, upstream)) == single_red &&
+                TrafficLightStatus(triple(otherLockInConfig(tuple(v, l)), right, upstream)) == single_red &&
+                TrafficLightStatus(triple(otherLockInConfig(tuple(v, l)), left, downstream)) == single_red &&
+                TrafficLightStatus(triple(otherLockInConfig(tuple(v, l)), right, downstream)) == single_red
+               )
+              )
+             ) 
+            )
+           ) &&
+
+           EmergencyStatus == disabled
+          )
+          ->
+           (LockStatus(tuple(l, left)) == closed && 
+            LockStatus(tuple(l, right)) == closed) -> 
+             skip . Controller(LockStoppedStatus=
+                                LockStoppedStatus[tuple(l,left)->false]
+                                                 [tuple(l,right)->false])
+            <> (LockStatus(tuple(l, right)) == closed) -> 
+              LockActuator(l, left, close) . 
+              Controller(LockStatus=LockStatus[tuple(l,left)->closing],
+                         LockStoppedStatus=LockStoppedStatus[tuple(l,left)->false]
+                                                            [tuple(l,right)->false])
+             <> (LockStatus(tuple(l, left)) == closed) -> 
+               LockActuator(l, right, close) . 
+               Controller(LockStatus=LockStatus[tuple(l,right)->closing],
+                          LockStoppedStatus=LockStoppedStatus[tuple(l,left)->false]
+                                                             [tuple(l,right)->false])
+              <> LockActuator(l, left, close) . 
+                 LockActuator(l, right, close) . 
+                 Controller(LockStatus=LockStatus[tuple(l,left)->closing]
+                                                 [tuple(l,right)->closing],
+                            LockStoppedStatus=LockStoppedStatus[tuple(l,left)->false]
+                                                               [tuple(l,right)->false])
+          <> skip.Controller() +
+
+     sum l:LockHead . LockCommand(l, command_stop).
+          ((VortexConfigStatus != nonRelatedVortexConfig(l)) &&
+           EmergencyStatus == disabled
+          )
+          ->   
+           LockActuator(l, left, stop) . 
+           LockActuator(l, right, stop) . 
+           Controller(LockStoppedStatus=LockStoppedStatus[tuple(l,left)->true]
+                                                         [tuple(l,right)->true])
+          <> skip.Controller() +
+          
+          %LEVELING EQUIPMENT COMMANDS
+     sum l:LockHead . LevelingEquipmentCommand(l, command_open).
+          ((VortexConfigStatus != nonRelatedVortexConfig(l)) &&
+
+           !(WaterLockStatus(l) == even) &&
+               
+           (LockStatus(tuple(l, left)) == closed && 
+            LockStatus(tuple(l, right)) == closed) &&
+
+           (exists v: VortexConfiguration . 
+            (v != nonRelatedVortexConfig(l) &&
+             LockStatus(tuple(otherLockInConfig(tuple(v, l)), left)) == closed &&
+             LockStatus(tuple(otherLockInConfig(tuple(v, l)), right)) == closed &&
+             LevelingEquipmentStatus(tuple(otherLockInConfig(tuple(v, l)), left)) == closed && 
+             LevelingEquipmentStatus(tuple(otherLockInConfig(tuple(v, l)), right)) == closed &&
+             ((l == middlehead) => 
+              ((v == UPPER && 
+                TrafficLightStatus(triple(lowerhead, left, downstream)) == single_red && 
+                TrafficLightStatus(triple(lowerhead, right, downstream)) == single_red) ||
+               (v == LOWER && 
+                TrafficLightStatus(triple(upperhead, left, upstream)) == single_red && 
+                TrafficLightStatus(triple(upperhead, right, upstream)) == single_red)
+              )
+             ) &&
+             ((l != middlehead) =>
+              ((otherLockInConfig(tuple(v, l)) == middlehead && 
+                ((v == UPPER && 
+                  TrafficLightStatus(triple(middlehead, right, upstream)) == single_red &&
+                  TrafficLightStatus(triple(middlehead, left, upstream)) == single_red) ||
+                 (v == LOWER && 
+                  TrafficLightStatus(triple(middlehead, right, downstream)) == single_red &&
+                  TrafficLightStatus(triple(middlehead, left, downstream)) == single_red)
+                )
+               ) || 
+               (otherLockInConfig(tuple(v, l)) != middlehead && 
+                TrafficLightStatus(triple(otherLockInConfig(tuple(v, l)), left, upstream)) == single_red &&
+                TrafficLightStatus(triple(otherLockInConfig(tuple(v, l)), right, upstream)) == single_red &&
+                TrafficLightStatus(triple(otherLockInConfig(tuple(v, l)), left, downstream)) == single_red &&
+                TrafficLightStatus(triple(otherLockInConfig(tuple(v, l)), right, downstream)) == single_red
+               )
+              )
+             ) 
+            )
+           ) &&
+
+           EmergencyStatus == disabled
+          )
+          -> 
+           (LevelingEquipmentStatus(tuple(l, left)) == opened &&
+            LevelingEquipmentStatus(tuple(l, right)) == opened) -> 
+             skip . Controller(LevelingEquipmentStoppedStatus=
+                                LevelingEquipmentStoppedStatus[tuple(l,left)->false]
+                                                              [tuple(l,right)->false])
+            <> (LevelingEquipmentStatus(tuple(l, right)) == opened) ->
+              LevelingEquipmentActuator(l, left, open) .
+              Controller(LevelingEquipmentStatus=LevelingEquipmentStatus[tuple(l,left)->opening],
+                         LevelingEquipmentStoppedStatus=
+                          LevelingEquipmentStoppedStatus[tuple(l,left)->false]
+                                                        [tuple(l,right)->false])
+             <> (LevelingEquipmentStatus(tuple(l, left)) == opened) ->
+               LevelingEquipmentActuator(l, right, open) .
+               Controller(LevelingEquipmentStatus=
+                           LevelingEquipmentStatus[tuple(l,right)->opening],
+                          LevelingEquipmentStoppedStatus=
+                           LevelingEquipmentStoppedStatus[tuple(l,left)->false]
+                                                         [tuple(l,right)->false])
+              <> LevelingEquipmentActuator(l, left, open) .
+                 LevelingEquipmentActuator(l, right, open) .
+                 Controller(LevelingEquipmentStatus=
+                             LevelingEquipmentStatus[tuple(l,left)->opening]
+                                                    [tuple(l,right)->opening],
+                            LevelingEquipmentStoppedStatus=
+                             LevelingEquipmentStoppedStatus[tuple(l,left)->false]
+                                                           [tuple(l,right)->false])
+          <> skip.Controller() +
+
+     sum l:LockHead . LevelingEquipmentCommand(l, command_close).
+          ((VortexConfigStatus != nonRelatedVortexConfig(l)) &&
+           (!(LevelingEquipmentStatus(tuple(l, left)) == closed &&
+              LevelingEquipmentStatus(tuple(l, right)) == closed) || 
+            (LevelingEquipmentStoppedStatus(tuple(l, left)) &&
+             LevelingEquipmentStoppedStatus(tuple(l, right)))) &&
+
+           EmergencyStatus == disabled
+          )
+          ->   
+           (LevelingEquipmentStatus(tuple(l, left)) == closed &&
+            LevelingEquipmentStatus(tuple(l, right)) == closed) ->
+             skip . Controller(LevelingEquipmentStoppedStatus=
+                                LevelingEquipmentStoppedStatus[tuple(l,left)->false]
+                                                              [tuple(l,right)->false])
+            <> (LevelingEquipmentStatus(tuple(l, right)) == closed) ->
+              LevelingEquipmentActuator(l, left, close) .
+              Controller(LevelingEquipmentStatus=LevelingEquipmentStatus[tuple(l,left)->closing],
+                         LevelingEquipmentStoppedStatus=
+                          LevelingEquipmentStoppedStatus[tuple(l,left)->false]
+                                                        [tuple(l,right)->false])
+             <> (LevelingEquipmentStatus(tuple(l, left)) == closed) -> 
+               LevelingEquipmentActuator(l, right, close) .
+               Controller(LevelingEquipmentStatus=LevelingEquipmentStatus[tuple(l,right)->closing],
+                          LevelingEquipmentStoppedStatus=
+                           LevelingEquipmentStoppedStatus[tuple(l,left)->false]
+                                                         [tuple(l,right)->false])
+              <> LevelingEquipmentActuator(l, left, close) .
+                LevelingEquipmentActuator(l, right, close) .
+                Controller(LevelingEquipmentStatus=LevelingEquipmentStatus[tuple(l,left)->closing]
+                                                                          [tuple(l,right)->closing],
+                           LevelingEquipmentStoppedStatus=
+                            LevelingEquipmentStoppedStatus[tuple(l,left)->false]
+                                                          [tuple(l,right)->false])
+          <> skip.Controller() +
+
+     sum l:LockHead . LevelingEquipmentCommand(l, command_stop).
+          (VortexConfigStatus != nonRelatedVortexConfig(l)
+          )
+          ->
+           LevelingEquipmentActuator(l, left, stop) .
+           LevelingEquipmentActuator(l, right, stop) .
+           Controller(LevelingEquipmentStoppedStatus=
+                       LevelingEquipmentStoppedStatus[tuple(l,left)->true][tuple(l,right)->true])
+          <> skip.Controller() +
+
+          
+          %TRAFFIC LIGHT CONTROLS 
+          %UPPERHEAD ENTERING TRAFFICLIGHTS
+     TrafficLightCommand(upperhead, upstream, redred) . 
+          ((TrafficLightStatus(triple(upperhead, left, upstream)) == single_red ||
+            TrafficLightStatus(triple(upperhead, right, upstream)) == single_red) &&
+           (VortexConfigStatus == WHOLE => 
+            ((TrafficLightStatus(triple(lowerhead, left, downstream)) == single_red ||
+              TrafficLightStatus(triple(lowerhead, left, downstream)) == redred) &&
+             (TrafficLightStatus(triple(lowerhead, right, downstream)) == single_red ||
+              TrafficLightStatus(triple(lowerhead, right, downstream)) == redred))) &&
+           EmergencyStatus == disabled                
+          )
+          -> TrafficLightActuator(upperhead, left, upstream, redred) .
+           TrafficLightActuator(upperhead, right, upstream, redred) .
+           Controller(TrafficLightStatus=
+                       TrafficLightStatus[triple(upperhead, left, upstream)->redred]
+                                         [triple(upperhead, right, upstream)->redred])
+          <> skip.Controller() +
+
+     TrafficLightCommand(upperhead, upstream, single_red) . 
+          (!(TrafficLightStatus(triple(upperhead, left, upstream)) == single_red &&
+             TrafficLightStatus(triple(upperhead, right, upstream)) == single_red) &&
+           EmergencyStatus == disabled                
+          )
+          -> TrafficLightActuator(upperhead, left, upstream, single_red) .
+           TrafficLightActuator(upperhead, right, upstream, single_red) .
+           Controller(TrafficLightStatus=
+                       TrafficLightStatus[triple(upperhead, left, upstream)->single_red]
+                                         [triple(upperhead, right, upstream)->single_red])
+          <> skip.Controller() +
+
+     TrafficLightCommand(upperhead, upstream, redgreen) . 
+          ((TrafficLightStatus(triple(upperhead, left, upstream)) == single_red ||
+            TrafficLightStatus(triple(upperhead, right, upstream)) == single_red) &&
+           EmergencyStatus == disabled                
+          )
+          -> TrafficLightActuator(upperhead, left, upstream, redgreen) .
+           TrafficLightActuator(upperhead, right, upstream, redgreen) .
+           Controller(TrafficLightStatus=
+                       TrafficLightStatus[triple(upperhead, left, upstream)->redgreen]
+                                         [triple(upperhead, right, upstream)->redgreen])
+          <> skip.Controller() +
+          
+     TrafficLightCommand(upperhead, upstream, green) . 
+          ((TrafficLightStatus(triple(upperhead, left, upstream)) == redgreen ||
+            TrafficLightStatus(triple(upperhead, right, upstream)) == redgreen) &&
+           (((VortexConfigStatus == UPPER || VortexConfigStatus == WHOLE) && 
+             TrafficLightStatus(triple(upperhead, left, downstream)) == single_red &&
+             TrafficLightStatus(triple(upperhead, right, downstream)) == single_red) || 
+            (VortexConfigStatus == LOWER && 
+             TrafficLightStatus(triple(middlehead, left, downstream)) == single_red &&
+             TrafficLightStatus(triple(middlehead, right, downstream)) == single_red)) &&
+           LockStatus(tuple(upperhead, left)) == opened &&
+           LockStatus(tuple(upperhead, right)) == opened &&
+           (VortexConfigStatus == LOWER => (LockStatus(tuple(middlehead, left)) == opened && 
+            LockStatus(tuple(middlehead, right)) == opened)) &&
+           (((VortexConfigStatus == WHOLE || VortexConfigStatus == LOWER) &&
+             LockStatus(tuple(lowerhead, left)) == closed &&
+             LockStatus(tuple(lowerhead, right)) == closed && 
+             TrafficLightStatus(triple(lowerhead, left, downstream)) == single_red &&
+             TrafficLightStatus(triple(lowerhead, right, downstream)) == single_red &&
+             TrafficLightStatus(triple(lowerhead, left, upstream)) == single_red &&
+             TrafficLightStatus(triple(lowerhead, right, upstream)) == single_red) || 
+            (VortexConfigStatus == UPPER && LockStatus(tuple(middlehead, left)) == closed &&
+             LockStatus(tuple(middlehead, right)) == closed &&
+             TrafficLightStatus(triple(middlehead, left, upstream)) == single_red &&
+             TrafficLightStatus(triple(middlehead, right, upstream)) == single_red)) &&
+           EmergencyStatus == disabled
+          )
+          -> TrafficLightActuator(upperhead, left, upstream, green) .
+           TrafficLightActuator(upperhead, right, upstream, green) .
+           Controller(TrafficLightStatus=
+                       TrafficLightStatus[triple(upperhead, left, upstream)->green]
+                                         [triple(upperhead, right, upstream)->green])
+          <> skip.Controller() +
+
+          %LOWERHEAD ENTERING TRAFFICLIGHTS
+     TrafficLightCommand(lowerhead, downstream, redred) . 
+          ((TrafficLightStatus(triple(lowerhead, left, downstream)) == single_red ||
+            TrafficLightStatus(triple(lowerhead, right, downstream)) == single_red) &&
+           (VortexConfigStatus == WHOLE => 
+            ((TrafficLightStatus(triple(upperhead, left, upstream)) == single_red ||
+              TrafficLightStatus(triple(upperhead, left, upstream)) == redred) &&
+             (TrafficLightStatus(triple(upperhead, right, upstream)) == single_red ||
+              TrafficLightStatus(triple(upperhead, right, upstream)) == redred))) &&
+           EmergencyStatus == disabled                
+          )
+          -> TrafficLightActuator(lowerhead, left, downstream, redred) .
+           TrafficLightActuator(lowerhead, right, downstream, redred) .
+           Controller(TrafficLightStatus=
+                       TrafficLightStatus[triple(lowerhead, left, downstream)->redred]
+                                         [triple(lowerhead, right, downstream)->redred])
+          <> skip.Controller() +
+
+     TrafficLightCommand(lowerhead, downstream, single_red) . 
+          (!(TrafficLightStatus(triple(lowerhead, left, downstream)) == single_red &&
+             TrafficLightStatus(triple(lowerhead, right, downstream)) == single_red) &&
+           EmergencyStatus == disabled                
+          )
+          -> TrafficLightActuator(lowerhead, left, downstream, single_red) .
+           TrafficLightActuator(lowerhead, right, downstream, single_red) .
+           Controller(TrafficLightStatus=
+                       TrafficLightStatus[triple(lowerhead, left, downstream)->single_red]
+                                         [triple(lowerhead, right, downstream)->single_red])
+          <> skip.Controller() +
+
+     TrafficLightCommand(lowerhead, downstream, redgreen) . 
+          ((TrafficLightStatus(triple(lowerhead, left, downstream)) == single_red ||
+            TrafficLightStatus(triple(lowerhead, right, downstream)) == single_red) &&
+           EmergencyStatus == disabled                
+          )
+          -> TrafficLightActuator(lowerhead, left, downstream, redgreen) .
+           TrafficLightActuator(lowerhead, right, downstream, redgreen) .
+           Controller(TrafficLightStatus=
+                       TrafficLightStatus[triple(lowerhead, left, downstream)->redgreen]
+                                         [triple(lowerhead, right, downstream)->redgreen])
+          <> skip.Controller() +
+          
+     TrafficLightCommand(lowerhead, downstream, green) . 
+          ((TrafficLightStatus(triple(lowerhead, left, upstream)) == redgreen ||
+            TrafficLightStatus(triple(lowerhead, right, upstream)) == redgreen) &&
+           (((VortexConfigStatus == LOWER || VortexConfigStatus == WHOLE) && 
+             TrafficLightStatus(triple(lowerhead, left, upstream)) == single_red &&
+             TrafficLightStatus(triple(lowerhead, right, upstream)) == single_red) || 
+            (VortexConfigStatus == UPPER && 
+             TrafficLightStatus(triple(middlehead, left, upstream)) == single_red &&
+             TrafficLightStatus(triple(middlehead, right, upstream)) == single_red)) &&
+           LockStatus(tuple(lowerhead, left)) == opened &&
+           LockStatus(tuple(lowerhead, right)) == opened &&
+           (VortexConfigStatus == UPPER => 
+            (LockStatus(tuple(middlehead, left)) == opened &&
+             LockStatus(tuple(middlehead, right)) == opened)) &&
+           (((VortexConfigStatus == WHOLE || VortexConfigStatus == UPPER) &&
+             LockStatus(tuple(upperhead, left)) == closed &&
+             LockStatus(tuple(upperhead, right)) == closed &&
+             TrafficLightStatus(triple(upperhead, left, downstream)) == single_red &&
+             TrafficLightStatus(triple(upperhead, right, downstream)) == single_red &&
+             TrafficLightStatus(triple(upperhead, left, upstream)) == single_red &&
+             TrafficLightStatus(triple(upperhead, right, upstream)) == single_red) || 
+            (VortexConfigStatus == LOWER && LockStatus(tuple(middlehead, left)) == closed &&
+             LockStatus(tuple(middlehead, right)) == closed &&
+             TrafficLightStatus(triple(middlehead, left, downstream)) == single_red &&
+             TrafficLightStatus(triple(middlehead, right, downstream)) == single_red)) &&
+           EmergencyStatus == disabled                
+          )
+          -> TrafficLightActuator(lowerhead, left, upstream, green) .
+           TrafficLightActuator(lowerhead, right, upstream, green) .
+           Controller(TrafficLightStatus=TrafficLightStatus[triple(lowerhead, left, upstream)->green]
+                                                           [triple(lowerhead, right, upstream)->green])
+          <> skip.Controller() +
+
+          %UPPERHEAD LEAVING TRAFFICLIGHTS
+     TrafficLightCommand(upperhead, downstream, single_red) .
+          ((VortexConfigStatus != nonRelatedVortexConfig(upperhead)) &&
+           !(TrafficLightStatus(triple(upperhead, left, downstream)) == single_red &&
+             TrafficLightStatus(triple(upperhead, right, downstream)) == single_red) &&
+           EmergencyStatus == disabled
+          )
+          -> TrafficLightActuator(upperhead, left, downstream, single_red) .
+           TrafficLightActuator(upperhead, right, downstream, single_red) . 
+           Controller(TrafficLightStatus=
+                       TrafficLightStatus[triple(upperhead, left, downstream)->single_red]
+                                         [triple(upperhead, right, downstream)->single_red])
+          <> skip.Controller() +
+
+     TrafficLightCommand(upperhead, downstream, green) . 
+          ((VortexConfigStatus != nonRelatedVortexConfig(upperhead)) &&
+           (TrafficLightStatus(triple(upperhead, left, downstream)) == single_red ||
+            TrafficLightStatus(triple(upperhead, right, downstream)) == single_red) &&
+           TrafficLightStatus(triple(upperhead, left, upstream)) == single_red &&
+           TrafficLightStatus(triple(upperhead, right, upstream)) == single_red &&
+
+           (((VortexConfigStatus == WHOLE || VortexConfigStatus == LOWER) &&
+             LockStatus(tuple(lowerhead, left)) == closed &&
+             LockStatus(tuple(lowerhead, right)) == closed &&
+             TrafficLightStatus(triple(lowerhead, left, downstream)) == single_red &&
+             TrafficLightStatus(triple(lowerhead, right, downstream)) == single_red &&
+             TrafficLightStatus(triple(lowerhead, left, upstream)) == single_red &&
+             TrafficLightStatus(triple(lowerhead, right, upstream)) == single_red) || 
+            (VortexConfigStatus == UPPER && LockStatus(tuple(middlehead, left)) == closed &&
+             LockStatus(tuple(middlehead, right)) == closed &&
+             TrafficLightStatus(triple(middlehead, left, upstream)) == single_red &&
+             TrafficLightStatus(triple(middlehead, right, upstream)) == single_red)) &&
+     
+           (LockStatus(tuple(upperhead, left)) == opened &&
+            LockStatus(tuple(upperhead, right)) == opened) &&
+           EmergencyStatus == disabled
+          )
+          -> TrafficLightActuator(upperhead, left, downstream, green) .
+           TrafficLightActuator(upperhead, right, downstream, green) . 
+           Controller(TrafficLightStatus=
+                       TrafficLightStatus[triple(upperhead, left, downstream)->green]
+                                         [triple(upperhead, right, downstream)->green])
+          <> skip.Controller() +
+
+          %MIDDLEHEAD LEAVING TRAFFICLIGHTS UPSTREAM
+     TrafficLightCommand(middlehead, upstream, single_red) .
+          ((VortexConfigStatus == UPPER) &&
+           !(TrafficLightStatus(triple(middlehead, left, upstream)) == single_red &&
+             TrafficLightStatus(triple(middlehead, right, upstream)) == single_red) &&
+           EmergencyStatus == disabled
+          )
+          -> TrafficLightActuator(middlehead, left, upstream, single_red) .
+           TrafficLightActuator(middlehead, right, upstream, single_red) . 
+           Controller(TrafficLightStatus=
+                       TrafficLightStatus[triple(middlehead, left, upstream)->single_red]
+                                         [triple(middlehead, right, upstream)->single_red])
+          <> skip.Controller() +
+
+     TrafficLightCommand(middlehead, upstream, green) . 
+          ((VortexConfigStatus == UPPER) &&
+           (TrafficLightStatus(triple(middlehead, left, upstream)) == single_red ||
+            TrafficLightStatus(triple(middlehead, right, upstream)) == single_red) &&
+           TrafficLightStatus(triple(lowerhead, left, downstream)) == single_red &&
+           TrafficLightStatus(triple(lowerhead, right, downstream)) == single_red &&
+
+           ((VortexConfigStatus == LOWER && LockStatus(tuple(lowerhead, left)) == closed &&
+             LockStatus(tuple(lowerhead, right)) == closed && 
+             TrafficLightStatus(triple(upperhead, left, upstream)) == single_red &&
+             TrafficLightStatus(triple(upperhead, right, upstream)) == single_red) || 
+            (VortexConfigStatus == UPPER && LockStatus(tuple(upperhead, left)) == closed &&
+             LockStatus(tuple(upperhead, right)) == closed &&
+             TrafficLightStatus(triple(lowerhead, left, downstream)) == single_red &&
+             TrafficLightStatus(triple(lowerhead, right, downstream)) == single_red)) &&
+
+           (LockStatus(tuple(middlehead, left)) == opened &&
+            LockStatus(tuple(middlehead, right)) == opened) &&
+           EmergencyStatus == disabled
+          )
+          -> TrafficLightActuator(middlehead, left, upstream, green) .
+           TrafficLightActuator(middlehead, right, upstream, green) . 
+           Controller(TrafficLightStatus=
+                       TrafficLightStatus[triple(middlehead, left, upstream)->green]
+                                         [triple(middlehead, right, upstream)->green])
+          <> skip.Controller() +
+          
+          %MIDDLEHEAD LEAVING TRAFFICLIGHTS DOWNSTREAM
+     TrafficLightCommand(middlehead, downstream, single_red) .
+          ((VortexConfigStatus == UPPER) &&
+           !(TrafficLightStatus(triple(middlehead, left, downstream)) == single_red &&
+             TrafficLightStatus(triple(middlehead, right, downstream)) == single_red) &&
+           EmergencyStatus == disabled
+          )
+          -> TrafficLightActuator(middlehead, left, downstream, single_red) .
+           TrafficLightActuator(middlehead, right, downstream, single_red) . 
+           Controller(TrafficLightStatus=
+                       TrafficLightStatus[triple(middlehead, left, downstream)->single_red]
+                                         [triple(middlehead, right, downstream)->single_red])
+          <> skip.Controller() +
+
+     TrafficLightCommand(middlehead, downstream, green) . 
+          ((VortexConfigStatus == LOWER) &&
+           (TrafficLightStatus(triple(middlehead, left, downstream)) == single_red ||
+            TrafficLightStatus(triple(middlehead, right, downstream)) == single_red) &&
+           TrafficLightStatus(triple(upperhead, left, upstream)) == single_red &&
+           TrafficLightStatus(triple(upperhead, right, upstream)) == single_red &&
+
+           ((VortexConfigStatus == LOWER && LockStatus(tuple(lowerhead, left)) == closed &&
+             LockStatus(tuple(lowerhead, right)) == closed && 
+             TrafficLightStatus(triple(upperhead, left, upstream)) == single_red &&
+             TrafficLightStatus(triple(upperhead, right, upstream)) == single_red) || 
+            (VortexConfigStatus == UPPER && LockStatus(tuple(upperhead, left)) == closed &&
+             LockStatus(tuple(upperhead, right)) == closed &&
+             TrafficLightStatus(triple(lowerhead, left, downstream)) == single_red &&
+             TrafficLightStatus(triple(lowerhead, right, downstream)) == single_red)) &&
+
+           (LockStatus(tuple(middlehead, left)) == opened &&
+            LockStatus(tuple(middlehead, right)) == opened) &&
+           EmergencyStatus == disabled
+          )
+          -> TrafficLightActuator(middlehead, left, downstream, green) .
+           TrafficLightActuator(middlehead, right, downstream, green) . 
+           Controller(TrafficLightStatus=
+                       TrafficLightStatus[triple(middlehead, left, downstream)->green]
+                                         [triple(middlehead, right, downstream)->green])
+          <> skip.Controller() +
+
+          %LOWERHEAD LEAVING TRAFFICLIGHTS
+     TrafficLightCommand(lowerhead, upstream, single_red) .
+          ((VortexConfigStatus != nonRelatedVortexConfig(lowerhead)) &&
+           !(TrafficLightStatus(triple(lowerhead, left, upstream)) == single_red &&
+             TrafficLightStatus(triple(lowerhead, right, upstream)) == single_red) &&
+           EmergencyStatus == disabled
+          )
+          -> TrafficLightActuator(lowerhead, left, upstream, single_red) .
+           TrafficLightActuator(lowerhead, right, upstream, single_red) . 
+           Controller(TrafficLightStatus=
+                       TrafficLightStatus[triple(lowerhead, left, upstream)->single_red]
+                                         [triple(lowerhead, right, upstream)->single_red])
+          <> skip.Controller() +
+
+     TrafficLightCommand(lowerhead, upstream, green) . 
+          ((VortexConfigStatus != nonRelatedVortexConfig(lowerhead)) &&
+           (TrafficLightStatus(triple(lowerhead, left, upstream)) == single_red ||
+            TrafficLightStatus(triple(lowerhead, right, upstream)) == single_red) &&
+           TrafficLightStatus(triple(lowerhead, left, downstream)) == single_red &&
+           TrafficLightStatus(triple(lowerhead, right, downstream)) == single_red &&
+
+           (((VortexConfigStatus == WHOLE || VortexConfigStatus == UPPER) &&
+             LockStatus(tuple(upperhead, left)) == closed &&
+             LockStatus(tuple(upperhead, right)) == closed &&
+             TrafficLightStatus(triple(upperhead, left, upstream)) == single_red &&
+             TrafficLightStatus(triple(upperhead, right, upstream)) == single_red &&
+             TrafficLightStatus(triple(upperhead, left, downstream)) == single_red &&
+             TrafficLightStatus(triple(upperhead, right, downstream)) == single_red) || 
+            (VortexConfigStatus == LOWER && LockStatus(tuple(middlehead, left)) == closed &&
+             LockStatus(tuple(middlehead, right)) == closed &&
+             TrafficLightStatus(triple(middlehead, left, downstream)) == single_red &&
+             TrafficLightStatus(triple(middlehead, right, downstream)) == single_red)) &&
+
+           (LockStatus(tuple(lowerhead, left)) == opened &&
+            LockStatus(tuple(lowerhead, right)) == opened) &&
+           EmergencyStatus == disabled
+          )
+          -> TrafficLightActuator(lowerhead, left, upstream, green) .
+           TrafficLightActuator(lowerhead, right, upstream, green) . 
+           Controller(TrafficLightStatus=
+                       TrafficLightStatus[triple(lowerhead, left, upstream)->green]
+                                         [triple(lowerhead, right, upstream)->green])
+          <> skip.Controller() +
+          
+
+          %LOCK/LEVELING EQUIPMENT SENSORS
+     sum l:LockHead, s:Side . LockSensor(l, s, sense_opened) . 
+          (LockStatus(tuple(l,s)) in {opening, opened})
+          -> LockActuator(l, s, endStopOpening) .
+            Controller(LockStatus=LockStatus[tuple(l,s)->opened])
+          <> skip.Controller() + 
+     sum l:LockHead, s:Side . LockSensor(l, s, sense_closed) .
+          (LockStatus(tuple(l,s)) in {closing, closed})
+          -> LockActuator(l, s, endStopClosing) .
+            Controller(LockStatus=LockStatus[tuple(l,s)->closed])
+          <> skip.Controller() + 
+
+     sum l:LockHead, s:Side . LevelingEquipmentSensor(l, s, sense_opened) .
+          (LevelingEquipmentStatus(tuple(l,s)) in {opening, opened})
+          -> LevelingEquipmentActuator(l, s, endStopOpening) .
+            Controller(LevelingEquipmentStatus=LevelingEquipmentStatus[tuple(l,s)->opened])
+          <> skip.Controller() + 
+     sum l:LockHead, s:Side . LevelingEquipmentSensor(l, s, sense_closed) .
+          (LevelingEquipmentStatus(tuple(l,s)) in {closing, closed})
+          -> LevelingEquipmentActuator(l, s, endStopClosing) .
+            Controller(LevelingEquipmentStatus=LevelingEquipmentStatus[tuple(l,s)->closed])
+          <> skip.Controller() + 
+
+
+          %EMERGENCY CONTROLS
+     EmergencyComplexCommand(enable) .     
+          TrafficLightActuator(upperhead, left, upstream, single_red) .
+          TrafficLightActuator(upperhead, right, upstream, single_red) .
+          TrafficLightActuator(upperhead, left, downstream, single_red) .
+          TrafficLightActuator(upperhead, right, downstream, single_red) .
+          TrafficLightActuator(middlehead, left, upstream, single_red) .
+          TrafficLightActuator(middlehead, right, upstream, single_red) .
+          TrafficLightActuator(middlehead, left, downstream, single_red) .
+          TrafficLightActuator(middlehead, right, downstream, single_red) .
+          TrafficLightActuator(lowerhead, left, upstream, single_red) .
+          TrafficLightActuator(lowerhead, right, upstream, single_red) .
+          TrafficLightActuator(lowerhead, left, downstream, single_red) .
+          TrafficLightActuator(lowerhead, right, downstream, single_red) .
+          LockActuator(upperhead, left, emergencyStop) .
+          LockActuator(upperhead, right, emergencyStop) .
+          LockActuator(middlehead, left, emergencyStop) .
+          LockActuator(middlehead, right, emergencyStop) .
+          LockActuator(lowerhead, left, emergencyStop) .
+          LockActuator(lowerhead, right, emergencyStop) .
+          LevelingEquipmentActuator(upperhead, left, emergencyStop) .
+          LevelingEquipmentActuator(upperhead, right, emergencyStop) .
+          LevelingEquipmentActuator(middlehead, left, emergencyStop) .
+          LevelingEquipmentActuator(middlehead, right, emergencyStop) .
+          LevelingEquipmentActuator(lowerhead, left, emergencyStop) .
+          LevelingEquipmentActuator(lowerhead, right, emergencyStop) .
+          Controller(LockStoppedStatus=
+                      LockStoppedStatus[tuple(upperhead,left)->true]
+                                       [tuple(upperhead,right)->true]
+                                       [tuple(middlehead,left)->true]
+                                       [tuple(middlehead,right)->true]
+                                       [tuple(lowerhead,left)->true]
+                                       [tuple(lowerhead,right)->true],
+                     LevelingEquipmentStoppedStatus=
+                      LevelingEquipmentStoppedStatus[tuple(upperhead,left)->true]
+                                                    [tuple(upperhead,right)->true]
+                                                    [tuple(middlehead,left)->true]
+                                                    [tuple(middlehead,right)->true]
+                                                    [tuple(lowerhead,left)->true]
+                                                    [tuple(lowerhead,right)->true],
+                     TrafficLightStatus=
+                      TrafficLightStatus[triple(upperhead, left, upstream) -> single_red]
+                                        [triple(upperhead, left, downstream) -> single_red]
+                                        [triple(upperhead, right, upstream) -> single_red]
+                                        [triple(upperhead, right, downstream) -> single_red]
+                                        [triple(middlehead, left, upstream) -> single_red]
+                                        [triple(middlehead, left, downstream) -> single_red]
+                                        [triple(middlehead, right, upstream) -> single_red]
+                                        [triple(middlehead, right, downstream) -> single_red]
+                                        [triple(lowerhead, left, upstream) -> single_red]
+                                        [triple(lowerhead, left, downstream) -> single_red]
+                                        [triple(lowerhead, right, upstream) -> single_red]
+                                        [triple(lowerhead, right, downstream) -> single_red],
+                     EmergencyStatus=enabled) +
+     EmergencyComplexCommand(disable) . Controller(EmergencyStatus=disabled) +
+
+          %VORTEX CONFIGURATION CONTROLS
+     VortexConfigCommand(UPPER) . 
+          (VortexConfigStatus != UPPER && LockStatus(tuple(lowerhead, left)) == opened &&
+           LockStatus(tuple(lowerhead, right)) == opened &&
+           TrafficLightStatus(triple(lowerhead, left, downstream)) == single_red &&
+           TrafficLightStatus(triple(lowerhead, right, downstream)) == single_red &&
+           TrafficLightStatus(triple(lowerhead, left, upstream)) == single_red &&
+           TrafficLightStatus(triple(lowerhead, right, upstream)) == single_red &&
+           ((VortexConfigStatus == LOWER && LockStatus(tuple(middlehead, left)) == closed &&
+             LockStatus(tuple(middlehead, right)) == closed) ||
+            (VortexConfigStatus == WHOLE && LockStatus(tuple(upperhead, left)) == closed &&
+             LockStatus(tuple(upperhead, right)) == closed)) &&
+          )
+          ->   
+           EnableVortexConfiguration(UPPER) . Controller(VortexConfigStatus=UPPER)
+          <> skip.Controller() +
+
+     VortexConfigCommand(LOWER) . 
+          (VortexConfigStatus != LOWER && LockStatus(tuple(upperhead, left)) == opened &&
+           LockStatus(tuple(upperhead, right)) == opened &&
+           TrafficLightStatus(triple(upperhead, left, upstream)) == single_red &&
+           TrafficLightStatus(triple(upperhead, right, upstream)) == single_red &&
+           TrafficLightStatus(triple(upperhead, left, downstream)) == single_red &&
+           TrafficLightStatus(triple(upperhead, right, downstream)) == single_red &&
+           ((VortexConfigStatus == WHOLE && LockStatus(tuple(lowerhead, left)) == closed &&
+             LockStatus(tuple(lowerhead, right)) == closed) ||
+            (VortexConfigStatus == UPPER && LockStatus(tuple(middlehead, left)) == closed &&
+             LockStatus(tuple(middlehead, right)) == closed))
+          )
+          ->   
+           EnableVortexConfiguration(LOWER) . Controller(VortexConfigStatus=LOWER)
+          <> skip.Controller() +
+
+     VortexConfigCommand(WHOLE) . 
+          (VortexConfigStatus != WHOLE && LockStatus(tuple(middlehead, left)) == opened &&
+           LockStatus(tuple(middlehead, right)) == opened &&
+           TrafficLightStatus(triple(middlehead, left, upstream)) != green &&
+           TrafficLightStatus(triple(middlehead, right, upstream)) != green &&
+           TrafficLightStatus(triple(middlehead, left, downstream)) != green &&
+           TrafficLightStatus(triple(middlehead, right, downstream)) != green &&
+           ((VortexConfigStatus == UPPER && LockStatus(tuple(upperhead, left)) == closed &&
+             LockStatus(tuple(upperhead, right)) == closed &&
+             TrafficLightStatus(triple(lowerhead, left, downstream)) == single_red &&
+             TrafficLightStatus(triple(lowerhead, right, downstream)) == single_red) ||
+            (VortexConfigStatus == LOWER && LockStatus(tuple(lowerhead, left)) == closed &&
+             LockStatus(tuple(lowerhead, right)) == closed &&
+             TrafficLightStatus(triple(upperhead, left, upstream)) == single_red &&
+             TrafficLightStatus(triple(upperhead, right, upstream)) == single_red))
+          )
+          ->   
+           EnableVortexConfiguration(WHOLE) . Controller(VortexConfigStatus=WHOLE)
+          <> skip.Controller() +
+          
+     %WATER SENSOR
+     sum l:LockHead, ws:WaterStatus . WaterSensor(l, ws) .
+     Controller(WaterLockStatus=WaterLockStatus[l->ws]);
+
+init 
+     (Controller(initialLockStatus,
+                 initialLevelingEquipmentStatus,
+                 initialLockStoppedStatus,
+                 initialLevelingEquipmentStoppedStatus,
+                 initialTrafficLightStatus,
+                 initialWaterLockStatus,
+                 disabled,
+                 WHOLE));
